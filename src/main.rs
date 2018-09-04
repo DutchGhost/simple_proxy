@@ -19,16 +19,16 @@ fn main() {
     let server = tcp
         .incoming()
         .for_each(move |tcp| {
-            let proxy = proxy(tcp, host_addr).map(drop).map_err(|e| {
-                println!("err {}", e);
+            let proxy = proxy(tcp, host_addr).map(drop).map_err(|err| { // <-- error from proxy to host
+                eprintln!("err {}", err);
             });
 
             tokio::spawn(proxy);
 
             Ok(())
         })
-        .map_err(|err| {
-            println!("server error {:?}", err);
+        .map_err(|err| { // <-- error from incomming connections
+            eprintln!("server error {:?}", err);
         });
 
     // Start the runtime and spin up the server
@@ -46,7 +46,7 @@ where
         .map(|(n, _, _)| {
             println!("wrote {} bytes", n);
         })
-        .map_err(|err| {
+        .map_err(|err| { // <-- io::copy error
             eprintln!("IO Error: {:?}", err);
         })
 }
@@ -68,8 +68,8 @@ where
         let sending = handled_copy(io::copy(server_reader, host_writer));
         let receiving = handled_copy(io::copy(host_reader, server_writer));
 
-        let proxy = sending.select(receiving).map(drop).map_err(|(e, _)| {
-            println!("Error: {:?}", e);
+        let proxy = sending.select(receiving).map(drop).map_err(|(err, _)| {
+            eprintln!("Error: {:?}", err);
         });
 
         tokio::spawn(proxy);
