@@ -45,11 +45,7 @@ fn main() {
     let server = tcp
         .incoming()
         .for_each(move |tcp| {
-            let proxy = proxy(tcp, host_addr).map(drop).map_err(|err| {
-                eprintln!("Could not connect to host: {}", err);
-            });
-
-            tokio::spawn(proxy);
+            tokio::spawn(proxy(tcp, host_addr));
 
             Ok(())
         }).map_err(|err| {
@@ -74,23 +70,26 @@ where
 ///
 /// It performs an io::copy from the client to the host,
 /// and an io::copy from the host to the client.
-fn proxy<R>(server: R, host: SocketAddr) -> impl Future<Item = (), Error = io::Error>
+fn proxy<R>(server: R, host: SocketAddr) -> impl Future<Item = (), Error = ()>
 where
     R: AsyncRead + AsyncWrite + Send + Sync + 'static,
 {
     let (server_reader, server_writer) = server.split();
 
-    TcpStream::connect(&host).and_then(move |stream| {
-        let (host_reader, host_writer) = stream.split();
+    TcpStream::connect(&host)
+        .and_then(move |stream| {
+            let (host_reader, host_writer) = stream.split();
 
-        let sending = copy(server_reader, host_writer);
-        let receiving = copy(host_reader, server_writer);
+            let sending = copy(server_reader, host_writer);
+            let receiving = copy(host_reader, server_writer);
 
-        let proxy = sending.select(receiving).map(drop).map_err(|(err, _)| {
-            eprintln!("An error occured while servering the proxy: {:?}", err);
-        });
+            let proxy = sending.select(receiving).map(drop).map_err(|(err, _)| {
+                eprintln!("An error occured while servering the proxy: {:?}", err);
+            });
 
-        tokio::spawn(proxy);
-        Ok(())
-    })
+            tokio::spawn(proxy);
+            Ok(())
+        }).map_err(|err| {
+            eprintln!("Could not connect to host: {}", err);
+        })
 }
