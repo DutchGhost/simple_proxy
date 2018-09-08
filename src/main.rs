@@ -5,7 +5,7 @@ use structopt::StructOpt;
 
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::prelude::*;
+use tokio::prelude::{AsyncRead, AsyncWrite, Future, Stream};
 
 use std::mem::drop;
 use std::net::{IpAddr, SocketAddr};
