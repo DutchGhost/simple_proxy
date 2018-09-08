@@ -1,17 +1,37 @@
-extern crate clap;
+extern crate structopt;
 extern crate tokio;
 
-use clap::{App, Arg};
+use structopt::StructOpt;
 
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
-use std::net::SocketAddr;
 use std::mem::drop;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+#[derive(Debug, StructOpt)]
+struct Cli {
+    #[structopt(
+        short = "l",
+        long = "localport",
+        parse(try_from_str),
+        default_value = "8080"
+    )]
+    localport: u16,
+
+    #[structopt(short = "r", long = "remotehost", parse(try_from_str))]
+    remotehost: IpAddr,
+
+    #[structopt(short = "p", long = "remoteport", parse(try_from_str))]
+    remoteport: u16,
+}
 
 fn main() {
-    let (server_addr, host_addr) = parse_args();
+    let app = Cli::from_args();
+
+    let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), app.localport);
+    let host_addr = SocketAddr::new(app.remotehost, app.remoteport);
 
     let tcp = TcpListener::bind(&server_addr).unwrap();
 
@@ -19,15 +39,16 @@ fn main() {
     let server = tcp
         .incoming()
         .for_each(move |tcp| {
-            let proxy = proxy(tcp, host_addr).map(drop).map_err(|err| { // <-- error from proxy to host
+            let proxy = proxy(tcp, host_addr).map(drop).map_err(|err| {
+                // <-- error from proxy to host
                 eprintln!("err {}", err);
             });
 
             tokio::spawn(proxy);
 
             Ok(())
-        })
-        .map_err(|err| { // <-- error from incomming connections
+        }).map_err(|err| {
+            // <-- error from incomming connections
             eprintln!("server error {:?}", err);
         });
 
@@ -45,8 +66,8 @@ where
     future
         .map(|(n, _, _)| {
             println!("wrote {} bytes", n);
-        })
-        .map_err(|err| { // <-- io::copy error
+        }).map_err(|err| {
+            // <-- io::copy error
             eprintln!("IO Error: {:?}", err);
         })
 }
@@ -75,50 +96,4 @@ where
         tokio::spawn(proxy);
         Ok(())
     })
-}
-
-/// Parses commandline arguments into 2 socket addresses.
-/// The first socket address is the server itself, the second is the host this server is a proxy to.
-fn parse_args() -> (SocketAddr, SocketAddr) {
-    let matches = App::new("SimpleProxy")
-        .version("0.0.1")
-        .author("DutchGhost")
-        .about("Proxy between 2 connections")
-        .arg(
-            Arg::with_name("localport")
-                .short("l")
-                .long("localport")
-                .value_name("STRING")
-                .help("Sets the port the proxy should listen on. Defaults to 8080.")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("remotehost")
-                .short("r")
-                .long("remotehost")
-                .value_name("STRING")
-                .help("The host to connect to")
-                .takes_value(true)
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("remoteport")
-                .short("p")
-                .long("remoteport")
-                .value_name("STRING")
-                .help("The port of the host to connect to")
-                .takes_value(true)
-                .required(true),
-        )
-        .get_matches();
-
-    let localport = matches.value_of("localport").unwrap_or_else(|| "8080");
-    let remotehost = matches.value_of("remotehost").unwrap();
-    let remoteport = matches.value_of("remoteport").unwrap();
-
-    let server = format!("0.0.0.0:{}", localport).parse().unwrap();
-
-    let host = format!("{}:{}", remotehost, remoteport).parse().unwrap();
-
-    (server, host)
 }
