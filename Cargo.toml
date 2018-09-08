@@ -5,4 +5,4 @@ authors = ["DutchGhost <kasper199914@gmail.com>"]
 
 [dependencies]
 tokio = "*"
-clap = "*"
+structopt = "*"
