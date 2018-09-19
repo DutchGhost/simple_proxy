@@ -45,7 +45,7 @@ fn main() {
     let server = tcp
         .incoming()
         .for_each(move |tcp| {
-            tokio::spawn(proxy(tcp, host_addr));
+            tokio::spawn(proxy(tcp, &host_addr));
 
             Ok(())
         }).map_err(|err| {
@@ -70,13 +70,13 @@ where
 ///
 /// It performs an io::copy from the client to the host,
 /// and an io::copy from the host to the client.
-fn proxy<R>(server: R, host: SocketAddr) -> impl Future<Item = (), Error = ()>
+fn proxy<R>(server: R, host: &SocketAddr) -> impl Future<Item = (), Error = ()>
 where
     R: AsyncRead + AsyncWrite + Send + Sync + 'static,
 {
     let (server_reader, server_writer) = server.split();
 
-    TcpStream::connect(&host)
+    TcpStream::connect(host)
         .and_then(move |stream| {
             let (host_reader, host_writer) = stream.split();
 
